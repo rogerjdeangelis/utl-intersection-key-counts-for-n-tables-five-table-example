@@ -187,3 +187,210 @@ data _null_;
 run;quit;
 
 
+                                                                                 
+*____  _      _                   _                                              
+|  _ \(_) ___| |__   __ _ _ __ __| |                                             
+| |_) | |/ __| '_ \ / _` | '__/ _` |                                             
+|  _ <| | (__| | | | (_| | | | (_| |                                             
+|_| \_\_|\___|_| |_|\__,_|_|  \__,_|                                             
+                                                                                 
+;                                                                                
+Richard DeVenezia <rdevenezia@GMAIL.COM>                                         
+                                                                                 
+Hi Roger:                                                                        
+                                                                                 
+On the presumption of unique keys, the use of bit masks and binary anding        
+can examine (test) and accumulate frequency counts of the merge flag             
+permutations.                                                                    
+                                                                                 
+Reversing the in= flag variable names with respect to the input data sets        
+defines the bit ordering at compilation time, eliminating the need of a          
+reverse() invocation.                                                            
+                                                                                 
+data T1 T2 T3 T4 T5 ;                                                            
+  call streaminit(4321);                                                         
+  do I=1 to 30;                                                                  
+    if rand("uniform")>.6 then output T1;                                        
+    if rand("uniform")>.6 then output T2;                                        
+    if rand("uniform")>.6 then output T3;                                        
+    if rand("uniform")>.6 then output T4;                                        
+    if rand("uniform")>.6 then output T5;                                        
+  end;                                                                           
+run;                                                                             
+%macro each(range, template);                                                    
+                                                                                 
+%mend;                                                                           
+data freqs;                                                                      
+  merge t1(in=f5) t2(in=f4) t3(in=f3) t4(in=f2) t5(in=f1) end=end;               
+  by I;                                                                          
+  bin = input(cats(of f1-f5), binary5.);                                         
+  array freqs (0:31) _temporary_;                                                
+  array masks (0:31) _temporary_ (0:31);                                         
+  do _n_ = 0 to 31;                                                              
+    freqs(_n_) + band(masks(_n_), bin) = masks(_n_);                             
+  end;                                                                           
+  if end then do index=0 to 31;                                                  
+    cnt=freqs(index);                                                            
+    output;                                                                      
+  end;                                                                           
+  keep index cnt;                                                                
+run;                                                                             
+.                                                                                
+Enjoy,                                                                           
+                                                                                 
+Richard DeVenezia                                                                
+                                                                                 
+*____             _                                                              
+| __ )  __ _ _ __| |_                                                            
+|  _ \ / _` | '__| __|                                                           
+| |_) | (_| | |  | |_                                                            
+|____/ \__,_|_|   \__|                                                           
+                                                                                 
+;                                                                                
+Bart Jablonski <yabwon@GMAIL.COM>                                                
+                                                                                 
+Hi Roger,                                                                        
+                                                                                 
+I think that merge+array and binary5. format will work, below is the code for    
+T1-T5, and some testing + macro (tested also on T1-T7, T7 is disjoint from T1-T6)
+[everything is outputed into the log]                                            
+                                                                                 
+All the best                                                                     
+Bart                                                                             
+                                                                                 
+                                                                                 
+data T1 T2 T3 T4 T5 ;                                                            
+  call streaminit(4321);                                                         
+  do I=1 to 30;                                                                  
+    if rand("uniform")>.6 then output T1;                                        
+    if rand("uniform")>.6 then output T2;                                        
+    if rand("uniform")>.6 then output T3;                                        
+    if rand("uniform")>.6 then output T4;                                        
+    if rand("uniform")>.6 then output T5;                                        
+  end;                                                                           
+run;                                                                             
+                                                                                 
+options ls=max ps=max;                                                           
+data _null_;                                                                     
+  merge                                                                          
+    T1(in=T1)                                                                    
+    T2(in=T2)                                                                    
+    T3(in=T3)                                                                    
+    T4(in=T4)                                                                    
+    T5(in=T5)                                                                    
+  end = EOF;                                                                     
+  ;                                                                              
+  by I;                                                                          
+                                                                                 
+  array JJ[1:31] _temporary_;                                                    
+                                                                                 
+  length Jbin $ 5;                                                               
+  do J=1 to 31;                                                                  
+    Jbin = reverse(put(J, binary5.));                                            
+    /* if this I in given group */                                               
+    x = (                                                                        
+      char(Jbin,1) * T1 +                                                        
+      char(Jbin,2) * T2 +                                                        
+      char(Jbin,3) * T3 +                                                        
+      char(Jbin,4) * T4 +                                                        
+      char(Jbin,5) * T5                                                          
+      );                                                                         
+    /* how many group we are expecting */                                        
+    y = (                                                                        
+      char(Jbin,1) +                                                             
+      char(Jbin,2) +                                                             
+      char(Jbin,3) +                                                             
+      char(Jbin,4) +                                                             
+      char(Jbin,5)                                                               
+      );                                                                         
+                                                                                 
+    JJ[J] + (x=y);                                                               
+    /*put _all_;*/                                                               
+  end;                                                                           
+                                                                                 
+  if EOF then                                                                    
+  do J2 = 1 to 31;                                                               
+    J2bin = reverse(put(J2, binary5.));                                          
+    put J2=z2. J2bin= JJ[J2];                                                    
+  end;                                                                           
+run;                                                                             
+                                                                                 
+                                                                                 
+                                                                                 
+                                                                                 
+data T6;                                                                         
+  i = 30; output;                                                                
+  i = 31; output;                                                                
+run;                                                                             
+                                                                                 
+data T7;                                                                         
+  i = 32; output;                                                                
+  i = 33; output;                                                                
+run;                                                                             
+                                                                                 
+                                                                                 
+%macro test(                                                                     
+  t=5 /* number of sets to compare */                                            
+, sort=0 /* if sorting is required ste to 1 */                                   
+);                                                                               
+                                                                                 
+%let N = %sysevalf(2**&t. - 1);                                                  
+%let L = %sysfunc(ceil(%sysfunc(log10(&N.))));                                   
+                                                                                 
+%if &sort. %then                                                                 
+%do;                                                                             
+  %do I = 1 %to &t.;                                                             
+    proc sort data = T&I.;                                                       
+      by I;                                                                      
+    run;                                                                         
+  %end;                                                                          
+%end;                                                                            
+                                                                                 
+data _null_;                                                                     
+  merge                                                                          
+    %do I = 1 %to &t.;                                                           
+      T&I.(in=T&I.)                                                              
+    %end;                                                                        
+  end = EOF;                                                                     
+  ;                                                                              
+  by I;                                                                          
+                                                                                 
+  array JJ[1:&N.] _temporary_;                                                   
+                                                                                 
+  length Jbin $ &t.;                                                             
+  do J=1 to &N.;                                                                 
+    Jbin = reverse(put(J, binary&t..));                                          
+    /* if this I in given group */                                               
+    x = (                                                                        
+      %do I = 1 %to &t.;                                                         
+        char(Jbin,&I.) * T&I. +                                                  
+      %end;                                                                      
+      0                                                                          
+      );                                                                         
+    /* how many group we are expecting */                                        
+    y = (                                                                        
+      %do I = 1 %to &t.;                                                         
+        char(Jbin,&I.) +                                                         
+      %end;                                                                      
+      0                                                                          
+      );                                                                         
+                                                                                 
+    JJ[J] + (x=y);                                                               
+    /*put _all_;*/                                                               
+  end;                                                                           
+                                                                                 
+  if EOF then                                                                    
+  do J2 = 1 to &N.;                                                              
+    J2bin = reverse(put(J2, binary&t..));                                        
+    put J2=z&L.. J2bin= JJ[J2];                                                  
+  end;                                                                           
+run;                                                                             
+                                                                                 
+%mend test;                                                                      
+                                                                                 
+%test(t=5)                                                                       
+                                                                                 
+%test(t=7)                                                                       
+                                                                                 
+                                                                                 
+
